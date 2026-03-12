@@ -215,7 +215,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
           {/* Header */}
           <View style={styles.header}>
             <Image
-              source={require("../../assets/images/logo_mm-removebg-preview.png")}
+              source={require("../../assets/images/Logo_gambar__nya_saja-removebg-preview.png")}
               style={styles.logoImage}
             />
             <Text style={styles.appTitle}>Chatbot Assistant</Text>

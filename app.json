@@ -4,7 +4,7 @@
     "slug": "asisten-chatbot-ai",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/Gemini_Generated_Image_y8ny9ry8ny9ry8ny__1_-removebg-preview.png",
+    "icon": "./assets/images/logo 1024.png",
     "scheme": "asisten-chatbot-ai",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -35,7 +35,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/Gemini_Generated_Image_y8ny9ry8ny9ry8ny__1_-removebg-preview.png",
+          "image": "./assets/images/Logo_gambar__nya_saja-removebg-preview.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",

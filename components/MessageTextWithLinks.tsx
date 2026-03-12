@@ -1,13 +1,13 @@
 import React from "react";
 import {
   Alert,
-  Clipboard,
   Linking,
   Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 
 interface MessageTextWithLinksProps {
   text: string;
@@ -21,7 +21,7 @@ export const MessageTextWithLinks: React.FC<MessageTextWithLinksProps> = ({
   onCopy,
 }) => {
   const copyToClipboard = async (textToCopy: string) => {
-    await Clipboard.setString(textToCopy);
+    await Clipboard.setStringAsync(textToCopy);
     if (onCopy) {
       onCopy(textToCopy);
     }

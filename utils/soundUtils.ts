@@ -1,5 +1,5 @@
 import { Audio } from "expo-av";
-import { Vibration, Platform } from "react-native";
+import { Platform, Vibration } from "react-native";
 
 let sound: Audio.Sound | null = null;
 let isAudioConfigured = false;
@@ -10,7 +10,7 @@ export const MODAL_ANIMATION_DURATION = 300;
 // Configure audio mode for iOS
 const configureAudio = async () => {
   if (isAudioConfigured) return;
-  
+
   try {
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
@@ -26,7 +26,7 @@ const configureAudio = async () => {
 export const playModalSound = async () => {
   try {
     await configureAudio();
-    
+
     if (sound) {
       await sound.unloadAsync();
     }
@@ -51,7 +51,7 @@ export const playModalSound = async () => {
 export const playModalSoundWithVibration = async () => {
   try {
     await configureAudio();
-    
+
     // Try to play sound
     try {
       if (sound) {
@@ -75,7 +75,7 @@ export const playModalSoundWithVibration = async () => {
     }
 
     // Vibrate
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === "ios") {
       Vibration.vibrate();
     } else {
       Vibration.vibrate([0, 100, 50, 100]);
@@ -88,7 +88,7 @@ export const playModalSoundWithVibration = async () => {
 export const playImagePickerSound = async () => {
   try {
     await configureAudio();
-    
+
     if (sound) {
       await sound.unloadAsync();
     }

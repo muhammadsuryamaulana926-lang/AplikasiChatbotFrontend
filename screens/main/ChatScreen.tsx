@@ -1,13 +1,12 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { RouteProp, useFocusEffect } from "@react-navigation/native";
+import { RouteProp, useFocusEffect, useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   Alert,
   Animated,
-  Clipboard,
   Dimensions,
   Easing,
   Image,
@@ -25,6 +24,7 @@ import {
   UIManager,
   View,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { API_CONFIG } from "../../config/api-config";
 import { RootStackParamList } from "../../types/navigation";
@@ -34,11 +34,13 @@ import {
   isSameDay,
 } from "../../utils/timeUtils";
 import { playModalSound, playModalSoundWithVibration, MODAL_ANIMATION_DURATION } from "../../utils/soundUtils";
-import { loadPinnedChats, togglePinChat, sortChatHistory } from "../../utils/pinChatUtils";
+import { loadPinnedChats, savePinnedChats, togglePinChat, sortChatHistory } from "../../utils/pinChatUtils";
 import { SwipeableChatItem } from "../../components/SwipeableChatItem";
 import AccountSettingsScreen from "./AccountSettingsScreen";
 import { useTheme } from "../../contexts/ThemeContext";
 import { MessageTextWithLinks } from "../../components/MessageTextWithLinks";
+import { MenuSidebar } from "../../components/MenuSidebar";
+import { ChatMessage } from "../../components/ChatMessage";
 
 const { width, height } = Dimensions.get("window");
 const Colors = {
@@ -119,7 +121,8 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
   const historyScrollRef = useRef<ScrollView>(null);
   const scrollPositionRef = useRef(0);
   const isScrollingRef = useRef(false);
-  const scrollRestoreTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollRestoreTimeoutRef = useRef<any>(null);
+
   const lastScrollTimeRef = useRef(0);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteItemId, setDeleteItemId] = useState<string | null>(null);
@@ -191,7 +194,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
 
   const editingTextRef = useRef("");
   const originalTitleRef = useRef("");
-  const flatListRef = useRef<ScrollView>(null);
+  const flatListRef = useRef<SectionList>(null);
   const textInputRef = useRef<TextInput>(null);
   const editInputRef = useRef<TextInput>(null);
   const slideAnim = useRef(new Animated.Value(-width)).current;
@@ -504,6 +507,45 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
     }
   };
 
+  const scrollToBottom = useCallback((animated = true) => {
+    if (groupedMessages.length > 0 && flatListRef.current) {
+      try {
+        const lastSectionIndex = groupedMessages.length - 1;
+        const lastItemIndex = groupedMessages[lastSectionIndex].data.length - 1;
+        
+        if (lastItemIndex >= 0) {
+          // Use setTimeout to ensure the list has finished its render cycle
+          setTimeout(() => {
+            try {
+              flatListRef.current?.scrollToLocation({
+                sectionIndex: lastSectionIndex,
+                itemIndex: lastItemIndex,
+                animated,
+                viewPosition: 0.5, // Center position sometimes more reliable than 1 or 0
+              });
+              
+              // Second attempt specifically for bottom alignment if animated
+              if (animated) {
+                setTimeout(() => {
+                  flatListRef.current?.scrollToLocation({
+                    sectionIndex: lastSectionIndex,
+                    itemIndex: lastItemIndex,
+                    animated: true,
+                    viewPosition: 1,
+                  });
+                }, 100);
+              }
+            } catch (e) {
+              console.log("ScrollToLocation inner error:", e);
+            }
+          }, 50);
+        }
+      } catch (e) {
+        console.log("ScrollToBottom error:", e);
+      }
+    }
+  }, [groupedMessages]);
+
   const handleSend = async () => {
     if (!inputText.trim() || isLoading) return;
     const userMessage: MessageType = {
@@ -523,7 +565,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
     
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
-    const timeoutId = setTimeout(() => abortController.abort(), 60000); // 60 detik timeout
+    const timeoutId = setTimeout(() => abortController.abort(), 120000); // 120 detik timeout (2 menit)
     
     try {
       console.log("🔍 Mengirim ke backend...");
@@ -565,7 +607,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
       // Handle confirmation response
       if (data.result && typeof data.result === 'object' && data.result.type === 'confirmation') {
         const confirmationMessage: MessageType = {
-          id: (Date.now() + 1).toString(),
+          id: `confirm-${Date.now()}`,
           text: data.result.message,
           sender: "bot",
           timestamp: new Date(),
@@ -573,10 +615,12 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
           originalQuestion: data.result.originalQuestion,
           options: data.result.options
         };
-      const updatedMessages = [...messages, userMessage, confirmationMessage];
-      setMessages(updatedMessages);
-      await autoSaveToHistory(updatedMessages, currentInput);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 150);
+        setMessages((prev) => {
+          const updated = [...prev, confirmationMessage];
+          autoSaveToHistory(updated, currentInput);
+          return updated;
+        });
+        scrollToBottom(true);
         return;
       }
       
@@ -589,33 +633,38 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
       );
       const sourceIndicator = source === "database" ? "📊 " : "🤖 ";
       const botMessage: MessageType = {
-        id: (Date.now() + 1).toString(),
+        id: `bot-${Date.now()}`,
         text: `${sourceIndicator}${botResponseText || 'Tidak ada respons'}`,
         sender: "bot",
         timestamp: new Date(),
       };
-      const updatedMessages = [...messages, userMessage, botMessage];
-      setMessages(updatedMessages);
-      await autoSaveToHistory(updatedMessages, currentInput);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 150);
+      setMessages((prev) => {
+        const updated = [...prev, botMessage];
+        autoSaveToHistory(updated, currentInput);
+        return updated;
+      });
+      scrollToBottom(true);
     } catch (error: any) {
       clearTimeout(timeoutId);
+      
+      // Jika error karena dibatalkan (AbortError), jangan log sebagai error merah
+      if (error.name === 'AbortError') {
+        console.log("🔍 [handleSend] Request dibatalkan atau timeout (AbortError)");
+        return;
+      }
+
       console.error("❌ Error di handleSend:", error);
       
       let errorText = "❌ Maaf, terjadi kesalahan. Mohon periksa:\n1. Koneksi internet\n2. Backend berjalan\n3. Database aktif";
       
-      if (error.name === 'AbortError') {
-        return;
-      }
-      
       const errorMessage: MessageType = {
-        id: (Date.now() + 2).toString(),
+        id: `error-${Date.now()}`,
         text: errorText,
         sender: "bot",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 150);
+      scrollToBottom(true);
     } finally {
       setIsLoading(false);
       abortControllerRef.current = null;
@@ -630,48 +679,103 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
     setIsLoading(false);
   };
 
-  const handleConfirmation = async (originalQuestion: string, action: string) => {
-    setIsLoading(true);
+  const autoSaveToHistory = async (updatedMessages: MessageType[], currentQuestion: string) => {
     try {
-      const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/confirmation`, {
-        method: "POST",
+      const userEmail = await AsyncStorage.getItem("userEmail");
+      if (!userEmail) return;
+
+      const endpoint = currentChatId
+        ? `${API_CONFIG.BACKEND_URL}/api/chat/update`
+        : `${API_CONFIG.BACKEND_URL}/api/chat/save`;
+
+      const response = await fetch(endpoint, {
+        method: currentChatId ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
           "ngrok-skip-browser-warning": "true",
         },
-        body: JSON.stringify({ originalQuestion, action }),
+        body: JSON.stringify({
+          chatId: currentChatId,
+          userEmail: userEmail,
+          messages: updatedMessages,
+          title: currentChatId ? undefined : currentQuestion.substring(0, 30),
+        }),
       });
-      
-      if (!response.ok) {
-        throw new Error(`Error backend: ${response.status}`);
+
+      const data = await response.json();
+      if (data.success && !currentChatId && data.chatId) {
+        setCurrentChatId(data.chatId);
+        setCurrentChatTitle(data.title || currentChatTitle);
       }
       
+      // Refresh history sidebar
+      loadChatHistory(true);
+    } catch (error) {
+      console.error("Error auto-saving chat:", error);
+    }
+  };
+
+  const handleConfirmation = async (originalQuestion: string, action: string) => {
+    if (action === 'cancel') {
+      const cancelMessage: MessageType = {
+        id: (Date.now() + 1).toString(),
+        text: "Permintaan dibatalkan.",
+        sender: "bot",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, cancelMessage]);
+      scrollToBottom(true);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const userToken = await AsyncStorage.getItem("userToken");
+      const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/chat/confirm`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${userToken}`,
+          "ngrok-skip-browser-warning": "true",
+        },
+        body: JSON.stringify({
+          question: originalQuestion,
+          action: action
+        }),
+      });
+
       const data = await response.json();
-      if (data.success && data.result) {
-        const botResponseText = typeof data.result === 'object' ? data.result.message : data.result;
+      if (data.success) {
         const botMessage: MessageType = {
-          id: Date.now().toString(),
-          text: botResponseText || 'Tidak ada respons',
+          id: `bot-confirm-${Date.now()}`,
+          text: data.result.message || data.result,
           sender: "bot",
           timestamp: new Date(),
         };
-        setMessages((prev) => [...prev, botMessage]);
-        await autoSaveToHistory([...messages, botMessage], originalQuestion);
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 150);
+        setMessages((prev) => {
+          const updated = [...prev, botMessage];
+          autoSaveToHistory(updated, originalQuestion);
+          return updated;
+        });
+        scrollToBottom(true);
       }
     } catch (error) {
       console.error("❌ Error di handleConfirmation:", error);
       const errorMessage: MessageType = {
-        id: Date.now().toString(),
-        text: "❌ Maaf, terjadi kesalahan saat memproses konfirmasi.",
+        id: (Date.now() + 1).toString(),
+        text: "⚠️ Gagal mengirim konfirmasi.",
         sender: "bot",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 150);
+      scrollToBottom(true);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleLogout = async () => {
+    setShowLogoutModal(true);
   };
 
 useEffect(() => {
@@ -726,9 +830,9 @@ useEffect(() => {
       }
       
       if (chatHistoryData.length > 0) {
-        const parsedHistory = chatHistoryData.map((item: any) => {
-          const messages = (item.messages || []).map((msg: any) => ({
-            id: msg.id?.toString() || Date.now().toString(),
+        const parsedHistory = chatHistoryData.map((item: any, chatIdx: number) => {
+          const messages = (item.messages || []).map((msg: any, msgIdx: number) => ({
+            id: msg.id?.toString() || `${Date.now()}-${chatIdx}-${msgIdx}`,
             text: msg.text || msg.konten || '',
             sender: msg.sender || (msg.peran === 'user' ? 'user' : 'bot'),
             timestamp: new Date(msg.timestamp || msg.dibuat_pada || Date.now()),
@@ -746,7 +850,8 @@ useEffect(() => {
         });
         
         const sortedHistory = sortChatHistory(parsedHistory, pinnedChatIds);
-        setChatHistory(sortedHistory);
+        setChatHistory(sortedHistory as ChatHistoryType[]);
+
         
         if (preserveScroll && savedScrollPosition > 0 && !isScrollingRef.current) {
           if (scrollRestoreTimeoutRef.current) {
@@ -778,54 +883,6 @@ useEffect(() => {
     }
   };
 
-  const autoSaveToHistory = async (
-    updatedMessages: MessageType[],
-    title: string,
-  ) => {
-    try {
-      const userEmail = await AsyncStorage.getItem("userEmail");
-      if (!userEmail) {
-        console.log("No user email, skipping save");
-        return;
-      }
-      const endpoint = currentChatId
-        ? `${API_CONFIG.BACKEND_URL}/api/chat/update`
-        : `${API_CONFIG.BACKEND_URL}/api/chat/save`;
-
-      console.log(
-        "Saving chat - ID:",
-        currentChatId,
-        "Messages count:",
-        updatedMessages.length,
-      );
-
-      const response = await fetch(endpoint, {
-        method: currentChatId ? "PUT" : "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "ngrok-skip-browser-warning": "true",
-        },
-        body: JSON.stringify({
-          chatId: currentChatId,
-          userEmail: userEmail,
-          messages: updatedMessages,
-          title: currentChatTitle || title,
-        }),
-      });
-      const data = await response.json();
-      if (data.success) {
-        if (!currentChatId && data.chatId) {
-          setCurrentChatId(data.chatId);
-          console.log("New chat created with ID:", data.chatId);
-        }
-        console.log(currentChatId ? "Chat updated" : "Chat saved to database");
-        // Reload history tanpa preserve scroll untuk chat baru
-        await loadChatHistory(!currentChatId ? false : true);
-      }
-    } catch (error) {
-      console.error("Error auto-saving to history:", error);
-    }
-  };
 
   const startNewChat = async () => {
     if (editingChatId) {
@@ -863,23 +920,34 @@ useEffect(() => {
     setChatHistory(updatedHistory);
     
     setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: false });
-    }, 200);
+      scrollToBottom(false); // First jump immediately
+      setTimeout(() => {
+        scrollToBottom(true); // Then ensure it's at the very bottom
+      }, 150);
+    }, 300);
   };
 
-  const handleLogout = async () => {
-    setShowLogoutModal(true);
-  };
-
-  const scrollToBottom = () => {
-    if (flatListRef.current) {
-      flatListRef.current.scrollToEnd({ animated: true });
-    }
-  };
 
   const scrollToBottomSmooth = () => {
-    if (!flatListRef.current) return;
-    flatListRef.current.scrollToEnd({ animated: true });
+    // Direct call to flatListRef for most immediate response
+    if (groupedMessages.length > 0 && flatListRef.current) {
+      const lastSectionIdx = groupedMessages.length - 1;
+      const lastItemIdx = groupedMessages[lastSectionIdx].data.length - 1;
+      
+      try {
+        flatListRef.current.scrollToLocation({
+          sectionIndex: lastSectionIdx,
+          itemIndex: lastItemIdx,
+          animated: true,
+          viewPosition: 1
+        });
+      } catch (e) {
+        scrollToBottom(true);
+      }
+    } else {
+      scrollToBottom(true);
+    }
+
     setShowScrollToBottom(false);
     Animated.timing(scrollButtonOpacity, {
       toValue: 0,
@@ -889,7 +957,7 @@ useEffect(() => {
   };
 
   const copyToClipboard = async (text: string) => {
-    await Clipboard.setString(text);
+    await Clipboard.setStringAsync(text);
     setShowCopyToast(true);
     Animated.sequence([
       Animated.timing(toastOpacity, {
@@ -906,442 +974,15 @@ useEffect(() => {
     ]).start(() => setShowCopyToast(false));
   };
 
-  const renderSectionHeader = ({ section }: { section: { title: string } }) => (
-    <View style={styles.dateSeparatorContainer}>
-      <View style={styles.dateSeparator}>
-        <Text style={[styles.dateSeparatorText, { backgroundColor: colors.botBubble, color: colors.textSecondary }]}>
-          {section.title}
-        </Text>
-      </View>
-    </View>
-  );
+  const renderMessage = useCallback(({ item }: { item: MessageType }) => (
+    <ChatMessage 
+      item={item} 
+      colors={colors} 
+      copyToClipboard={copyToClipboard} 
+      handleConfirmation={handleConfirmation} 
+    />
+  ), [colors, copyToClipboard, handleConfirmation]);
 
-
-
-  // Speech recognition event handlers - DISABLED
-  // useSpeechRecognitionEvent("start", () => {
-  //   console.log('🎤 Speech recognition started');
-  //   setRecognizing(true);
-  // });
-
-  // useSpeechRecognitionEvent("end", () => {
-  //   console.log('🎤 Speech recognition ended');
-  //   setRecognizing(false);
-  //   setIsRecording(false);
-  // });
-
-  // useSpeechRecognitionEvent("result", (event) => {
-  //   console.log('📝 Transcription:', event.results[0]?.transcript);
-  //   if (event.results[0]?.transcript) {
-  //     setInputText(event.results[0].transcript);
-  //   }
-  // });
-
-  // useSpeechRecognitionEvent("error", (event) => {
-  //   console.error('❌ Speech recognition error:', event.error);
-  //   Alert.alert('Error', `Gagal mengenali suara: ${event.error}`);
-  //   setIsRecording(false);
-  //   setRecognizing(false);
-  // });
-
-  // Voice recording functions - DISABLED
-  // async function startRecording() {
-  //   try {
-  //     const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-  //     if (!result.granted) {
-  //       Alert.alert('Izin Ditolak', 'Aplikasi memerlukan izin mikrofon untuk pengenalan suara');
-  //       return;
-  //     }
-
-      
-  //     setIsRecording(true);
-  //     setInputText('');
-      
-  //     await ExpoSpeechRecognitionModule.start({
-  //       lang: "id-ID",
-  //       interimResults: true,
-  //       maxAlternatives: 1,
-  //       continuous: false,
-  //       requiresOnDeviceRecognition: false,
-  //       addsPunctuation: false,
-  //       contextualStrings: [],
-  //       ...(Platform.OS === "android" && {
-  //         androidIntentOptions: {
-  //           EXTRA_LANGUAGE_MODEL: "free_form",
-  //         },
-  //         androidRecognitionServicePackage: "com.google.android.googlequicksearchbox",
-  //       }),
-  //     });
-      
-  //     console.log('🎤 Voice recognition started');
-  //   } catch (err) {
-  //     console.error('Failed to start voice recognition', err);
-  //     Alert.alert('Error', 'Gagal memulai pengenalan suara');
-  //     setIsRecording(false);
-  //   }
-  // }
-
-  // async function stopRecording() {
-  //   try {
-  //     await ExpoSpeechRecognitionModule.stop();
-  //     setIsRecording(false);
-  //     console.log('🎤 Voice recognition stopped');
-  //   } catch (err) {
-  //     console.error('Failed to stop voice recognition', err);
-  //     setIsRecording(false);
-  //   }
-  // }
-
-  const renderMessage = ({ item }: { item: MessageType }) => {
-    if (item.sender === "system") {
-      return (
-        <View style={styles.systemMessageContainer}>
-          <Text style={styles.systemMessageText}>{item.text}</Text>
-        </View>
-      );
-    }
-    
-    return (
-      <View>
-        <View
-          style={[
-            styles.messageRow,
-            item.sender === "user" ? styles.userRow : styles.botRow,
-          ]}
-        >
-          <TouchableOpacity
-            onLongPress={() => copyToClipboard(item.text)}
-            activeOpacity={0.7}
-            style={[
-              styles.messageBubble,
-              item.sender === "user" ? { backgroundColor: colors.userBubble } : { backgroundColor: colors.botBubble },
-            ]}
-          >
-            <MessageTextWithLinks
-              text={item.text}
-              style={[
-                styles.messageText,
-                item.sender === "user" ? { color: colors.userText } : { color: colors.botText },
-              ]}
-              onCopy={(text) => copyToClipboard(text)}
-            />
-            
-            {/* Confirmation buttons */}
-            {item.isConfirmation && item.options && (
-              <View style={styles.confirmationButtons}>
-                {item.options.map((option, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={[
-                      styles.confirmationButton,
-                      option.action === 'confirm' ? styles.confirmButton : styles.cancelButton
-                    ]}
-                    onPress={() => handleConfirmation(item.originalQuestion || '', option.action)}
-                  >
-                    <Text style={[
-                      styles.confirmationButtonText,
-                      option.action === 'confirm' ? styles.confirmButtonText : styles.cancelButtonText
-                    ]}>
-                      {option.text}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-            
-            <Text
-              style={[
-                styles.timeText,
-                item.sender === "user"
-                  ? styles.userTimeText
-                  : styles.botTimeText,
-              ]}
-            >
-              {item.timestamp.getHours().toString().padStart(2, "0")}:
-              {item.timestamp.getMinutes().toString().padStart(2, "0")}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
-
-  const renderHistoryItem = ({ item }: { item: ChatHistoryType }) => {
-    const isCurrentlyEditing = editingChatId === item.id;
-    const isPinned = pinnedChatIds.includes(item.id);
-    
-    return (
-      <SwipeableChatItem
-        isPinned={isPinned}
-        onPin={() => {
-          togglePinChat(item.id, pinnedChatIds, (newPinnedIds) => {
-            setPinnedChatIds(newPinnedIds);
-            // Optimistic update: sort chatHistory immediately
-            setChatHistory(prev => sortChatHistory([...prev], newPinnedIds));
-          });
-        }}
-        onUnpin={() => {
-          togglePinChat(item.id, pinnedChatIds, (newPinnedIds) => {
-            setPinnedChatIds(newPinnedIds);
-            // Optimistic update: sort chatHistory immediately
-            setChatHistory(prev => sortChatHistory([...prev], newPinnedIds));
-          });
-        }}
-        disabled={isCurrentlyEditing}
-      >
-        <TouchableOpacity
-          style={[
-            styles.historyItem,
-            { backgroundColor: colors.background },
-            currentChatId === item.id && [styles.historyItemActive, { backgroundColor: colors.botBubble }],
-            isPinned && [styles.historyItemPinned, { backgroundColor: colors.pinnedBackground }],
-          ]}
-          onPress={() => (!isCurrentlyEditing ? loadHistory(item) : null)}
-          onLongPress={() => {
-            setDeleteItemId(item.id);
-            setShowDeleteModal(true);
-          }}
-          activeOpacity={isCurrentlyEditing ? 1 : 0.7}
-        >
-          <View style={[styles.historyIcon, { backgroundColor: isPinned ? colors.pinnedBackground : colors.cardBackground }]}>
-            <Ionicons
-              name={isPinned ? "pin" : "chatbubble"}
-              size={20}
-              color={isPinned ? colors.pinnedIconColor : (item.unread ? colors.primary : colors.textSecondary)}
-            />
-          </View>
-          <View style={styles.historyContent}>
-            <View style={styles.historyHeader}>
-              {isCurrentlyEditing ? (
-                <TextInput
-                  ref={editInputRef}
-                  style={[styles.editingInput, { color: colors.text, borderBottomColor: colors.primary }]}
-                  defaultValue={item.title}
-                  onChangeText={(text) => {
-                    editingTextRef.current = text;
-                  }}
-                  onEndEditing={async () => {
-                    const finalText = editingTextRef.current.trim();
-                    const originalText = originalTitleRef.current;
-                    const textToSave = finalText === "" ? originalText : finalText;
-                    if (textToSave !== originalText) {
-                      try {
-                        const response = await fetch(
-                          `${API_CONFIG.BACKEND_URL}/api/chat/update-title`,
-                          {
-                            method: "PUT",
-                            headers: {
-                              "Content-Type": "application/json",
-                              "ngrok-skip-browser-warning": "true",
-                            },
-                            body: JSON.stringify({
-                              chatId: item.id,
-                              newTitle: textToSave,
-                            }),
-                          },
-                        );
-                        const data = await response.json();
-                        if (data.success) {
-                          if (currentChatId === item.id) {
-                            setCurrentChatTitle(textToSave);
-                          }
-                          setChatHistory((prev) =>
-                            prev.map((chat) =>
-                              chat.id === item.id
-                                ? { ...chat, title: textToSave }
-                                : chat,
-                            ),
-                          );
-                        }
-                      } catch (error) {
-                        console.error("Error updating title:", error);
-                      }
-                    }
-                    setEditingChatId(null);
-                    setIsEditing(false);
-                    editingTextRef.current = "";
-                    originalTitleRef.current = "";
-                  }}
-                  autoFocus={false}
-                  returnKeyType="done"
-                  multiline={false}
-                  keyboardType="default"
-                />
-              ) : (
-                <Text
-                  style={[
-                    styles.historyItemTitle,
-                    item.unread && styles.historyTitleUnread,
-                    isPinned && styles.historyTitlePinned,
-                    { color: colors.text }
-                  ]}
-                  numberOfLines={1}
-                >
-                  {item.title}
-                </Text>
-              )}
-            </View>
-          </View>
-          <View style={styles.historyRightSection}>
-            <Text style={[styles.historyTime, { color: colors.textSecondary }]}>
-              {formatRelativeTime(item.timestamp)}
-            </Text>
-          </View>
-        </TouchableOpacity>
-      </SwipeableChatItem>
-    );
-  };
-
-  // Sidebar history dengan safe area handling
-  const MenuSidebar = () => (
-    <Animated.View
-      style={[styles.menuContainer, { transform: [{ translateX: slideAnim }], backgroundColor: colors.background, borderRightColor: colors.border }]}
-    >
-      <View style={[styles.menuHeader, { borderBottomColor: colors.border }]}>
-        <View style={styles.menuLogo}>
-          <LinearGradient
-            colors={["#007AFF", "#5856D6"]}
-            style={styles.logoGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <MaterialIcons name="smart-toy" size={20} color="#FFFFFF" />
-          </LinearGradient>
-          <View style={styles.menuTitleContainer}>
-            <Text style={[styles.menuAppName, { color: colors.text }]}>Asisten Chatbot AI</Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          style={styles.closeMenuButton}
-          onPress={() => {
-            if (editingChatId) {
-              editInputRef.current?.blur();
-            }
-            setShowMenu(false);
-          }}
-        >
-          <Ionicons name="close" size={24} color={colors.text} />
-        </TouchableOpacity>
-      </View>
-      <View style={styles.menuContent}>
-        <TouchableOpacity style={[styles.newChatButton, { backgroundColor: colors.primary }]} onPress={startNewChat}>
-          <View style={styles.newChatIcon}>
-            <Ionicons name="add" size={24} color="#FFFFFF" />
-          </View>
-          <Text style={styles.newChatText}>Percakapan Baru</Text>
-        </TouchableOpacity>
-
-        <View style={{ marginTop: 16 }}>
-          <Text style={[styles.historyHeaderTitle, { color: colors.text }]}>Riwayat</Text>
-        </View>
-
-        {pinnedChatIds.length > 0 && (
-          <View style={[styles.pinnedSection, { backgroundColor: colors.background }]}>
-            <View style={[styles.stickyHeaderContainer, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-              <Text style={[styles.sectionHeaderText, { color: colors.textSecondary, marginLeft: 10, marginTop: 0, marginBottom: 0 }]}>
-                Disematkan
-              </Text>
-            </View>
-            <ScrollView 
-              style={{ maxHeight: 200 }}
-              contentContainerStyle={{ paddingTop: 8 }}
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled={true}
-            >
-              {chatHistory
-                .filter(item => pinnedChatIds.includes(item.id))
-                .map((item) => (
-                  <View key={`pinned-${item.id}`}>
-                    {renderHistoryItem({ item })}
-                  </View>
-                ))}
-            </ScrollView>
-          </View>
-        )}
-        
-        <ScrollView
-          ref={historyScrollRef}
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: 12, paddingTop: 8 }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="always"
-          removeClippedSubviews={false}
-          onTouchStart={() => {
-            isScrollingRef.current = true;
-            lastScrollTimeRef.current = Date.now();
-            if (scrollRestoreTimeoutRef.current) {
-              clearTimeout(scrollRestoreTimeoutRef.current);
-              scrollRestoreTimeoutRef.current = null;
-            }
-          }}
-          onTouchEnd={() => {
-            lastScrollTimeRef.current = Date.now();
-            setTimeout(() => {
-              isScrollingRef.current = false;
-            }, 1000);
-          }}
-          onScrollBeginDrag={() => {
-            isScrollingRef.current = true;
-            lastScrollTimeRef.current = Date.now();
-            if (scrollRestoreTimeoutRef.current) {
-              clearTimeout(scrollRestoreTimeoutRef.current);
-              scrollRestoreTimeoutRef.current = null;
-            }
-          }}
-          onScrollEndDrag={() => {
-            lastScrollTimeRef.current = Date.now();
-            setTimeout(() => {
-              isScrollingRef.current = false;
-            }, 1000);
-          }}
-          onMomentumScrollBegin={() => {
-            isScrollingRef.current = true;
-            lastScrollTimeRef.current = Date.now();
-          }}
-          onMomentumScrollEnd={() => {
-            lastScrollTimeRef.current = Date.now();
-            setTimeout(() => {
-              isScrollingRef.current = false;
-            }, 1000);
-          }}
-          onScroll={(e) => {
-            scrollPositionRef.current = e.nativeEvent.contentOffset.y;
-            lastScrollTimeRef.current = Date.now();
-          }}
-          scrollEventThrottle={16}
-        >
-          {chatHistory.length === 0 ? (
-            <View style={styles.emptyHistoryContainer}>
-              <Ionicons name="chatbubbles-outline" size={48} color={colors.textSecondary} />
-              <Text style={[styles.emptyHistoryText, { color: colors.textSecondary }]}>
-                Belum ada riwayat percakapan
-              </Text>
-              <TouchableOpacity 
-                style={[styles.refreshHistoryButton, { backgroundColor: colors.primary }]}
-                onPress={() => loadChatHistory()}
-              >
-                <Text style={styles.refreshHistoryText}>Refresh</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <>
-              {chatHistory.filter(item => !pinnedChatIds.includes(item.id)).length > 0 && (
-                <>
-                  {chatHistory
-                    .filter(item => !pinnedChatIds.includes(item.id))
-                    .map((item) => (
-                      <View key={`history-${item.id}`}>
-                        {renderHistoryItem({ item })}
-                      </View>
-                    ))}
-                </>
-              )}
-            </>
-          )}
-        </ScrollView>
-      </View>
-    </Animated.View>
-  );
 
   return (
     <SafeAreaView style={[styles.safeAreaContainer, { backgroundColor: colors.background }]}>
@@ -1536,7 +1177,35 @@ useEffect(() => {
           activeOpacity={1}
         />
       </Animated.View>
-      <MenuSidebar />
+      <MenuSidebar
+        showMenu={showMenu}
+        setShowMenu={setShowMenu}
+        colors={colors}
+        slideAnim={slideAnim}
+        editingChatId={editingChatId}
+        setEditingChatId={setEditingChatId}
+        editInputRef={editInputRef}
+        editingTextRef={editingTextRef}
+        originalTitleRef={originalTitleRef}
+        startNewChat={startNewChat}
+        pinnedChatIds={pinnedChatIds}
+        setPinnedChatIds={setPinnedChatIds}
+        chatHistory={chatHistory}
+        setChatHistory={setChatHistory}
+        currentChatId={currentChatId}
+        loadHistory={loadHistory}
+        loadChatHistory={loadChatHistory}
+        historyScrollRef={historyScrollRef}
+        scrollPositionRef={scrollPositionRef}
+        isScrollingRef={isScrollingRef}
+        scrollRestoreTimeoutRef={scrollRestoreTimeoutRef}
+        lastScrollTimeRef={lastScrollTimeRef}
+        setDeleteItemId={setDeleteItemId}
+        setShowDeleteModal={setShowDeleteModal}
+        setIsEditing={setIsEditing}
+        setCurrentChatTitle={setCurrentChatTitle}
+        API_CONFIG={API_CONFIG}
+      />
 
       {/* Main content */}
       <KeyboardAvoidingView
@@ -1704,8 +1373,20 @@ useEffect(() => {
         )}
 
         {/* Chat messages dengan ScrollView */}
-        <ScrollView
+        <SectionList
           ref={flatListRef}
+          sections={groupedMessages}
+          keyExtractor={(item) => item.id}
+          renderItem={renderMessage}
+          renderSectionHeader={({ section }) => (
+            <View style={styles.dateSeparatorContainer}>
+              <View style={styles.dateSeparator}>
+                <Text style={[styles.dateSeparatorText, { backgroundColor: colors.botBubble, color: colors.textSecondary }]}>
+                  {section.title}
+                </Text>
+              </View>
+            </View>
+          )}
           style={{ flex: 1 }}
           contentContainerStyle={[
             styles.chatList,
@@ -1713,7 +1394,7 @@ useEffect(() => {
           ]}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => {
-            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+            setTimeout(() => scrollToBottom(true), 150);
           }}
           onScroll={(e) => {
             const offsetY = e.nativeEvent.contentOffset.y;
@@ -1732,18 +1413,7 @@ useEffect(() => {
             }
           }}
           scrollEventThrottle={16}
-        >
-          {groupedMessages.map((section, sectionIndex) => (
-            <View key={`section-${sectionIndex}`}>
-              {renderSectionHeader({ section })}
-              {section.data.map((item) => (
-                <View key={item.id}>
-                  {renderMessage({ item })}
-                </View>
-              ))}
-            </View>
-          ))}
-          {isLoading && (
+          ListFooterComponent={isLoading ? (
             <View style={styles.typingIndicatorInline}>
               <View style={[styles.typingBubble, { backgroundColor: colors.botBubble }]}>
                 <View style={styles.typingDots}>
@@ -1753,8 +1423,8 @@ useEffect(() => {
                 </View>
               </View>
             </View>
-          )}
-        </ScrollView>
+          ) : null}
+        />
 
         {/* Scroll to Bottom Button */}
         <Animated.View
@@ -2743,6 +2413,5 @@ const styles = StyleSheet.create({
     backgroundColor: "#F2F2F7",
     marginVertical: 0,
     marginHorizontal: 10,
-  },
-
+  }
 });

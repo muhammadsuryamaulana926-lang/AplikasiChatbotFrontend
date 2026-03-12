@@ -43,7 +43,7 @@ export default function LoadingScreen() {
 
         {/* Logo */}
         <Image
-          source={require("../assets/images/Gemini_Generated_Image_y8ny9ry8ny9ry8ny__1_-removebg-preview.png")}
+          source={require("../assets/images/Logo_gambar__nya_saja-removebg-preview.png")}
           style={styles.logo}
           resizeMode="contain"
         />
