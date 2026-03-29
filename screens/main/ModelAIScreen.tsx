@@ -3,6 +3,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React, { useState } from "react";
 import {
   Alert,
+  Image,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -13,15 +14,115 @@ import {
 import { RootStackParamList } from "../../types/navigation";
 import { useTheme } from "../../contexts/ThemeContext";
 
+const ModelCard = React.memo(({ model, isExpanded, onToggle, colors }: any) => {
+  return (
+    <View style={[styles.modelCard, { borderColor: colors.border }]}>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => onToggle(model.id)}
+        style={[styles.modelItem, { backgroundColor: colors.cardBackground }]}
+      >
+        <View style={styles.modelHeader}>
+          <View style={[styles.modelIcon, { backgroundColor: model.color }]}>
+            {model.image ? (
+              <Image
+                source={model.image}
+                style={[
+                  styles.modelImage,
+                  model.id === "openrouter" && {
+                    resizeMode: "contain",
+                    backgroundColor: "#FFFFFF",
+                  },
+                ]}
+              />
+            ) : (
+              <Ionicons
+                name={(model as any).icon || "sparkles"}
+                size={20}
+                color="#FFFFFF"
+              />
+            )}
+          </View>
+          <View style={styles.modelInfo}>
+            <View style={styles.modelNameRow}>
+              <Text style={[styles.modelName, { color: colors.text }]}>
+                {model.name}
+              </Text>
+              <View style={styles.versionBadge}>
+                <Text style={styles.versionText}>{model.version}</Text>
+              </View>
+            </View>
+            <Text
+              style={[styles.modelDescription, { color: colors.textSecondary }]}
+            >
+              {model.description}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.expandButton}>
+          <Ionicons
+            name={isExpanded ? "chevron-up" : "chevron-down"}
+            size={20}
+            color={colors.textSecondary}
+          />
+        </View>
+      </TouchableOpacity>
+
+      {/* Details Content - Collapsible */}
+      {isExpanded && (
+        <View
+          style={[
+            styles.detailsContainer,
+            { backgroundColor: colors.inputBackground },
+          ]}
+        >
+          <Text style={[styles.detailedDescription, { color: colors.text }]}>
+            {model.detailedDescription}
+          </Text>
+
+          {/* Features Section */}
+          <View style={styles.featuresSection}>
+            <Text style={[styles.featuresTitle, { color: colors.text }]}>
+              Fitur Utama:
+            </Text>
+            <View style={styles.featuresGrid}>
+              {model.features.map((feature: string, index: number) => (
+                <View key={index} style={styles.featureBadge}>
+                  <Ionicons name="checkmark-circle" size={14} color="#34C759" />
+                  <Text style={styles.featureText}>{feature}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Best For Section */}
+          <View style={styles.bestForSection}>
+            <Text style={[styles.bestForTitle, { color: colors.text }]}>
+              Cocok Untuk:
+            </Text>
+            <View style={styles.bestForGrid}>
+              {model.bestFor.map((useCase: string, index: number) => (
+                <View key={index} style={styles.useCaseBadge}>
+                  <Text style={styles.useCaseText}>{useCase}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+});
+
 type ModelAIScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, "Chat">;
   onClose?: () => void;
 };
 
-export default function ModelAIScreen({
+const ModelAIScreen = React.memo(({
   navigation,
   onClose,
-}: ModelAIScreenProps) {
+}: ModelAIScreenProps) => {
   const { colors } = useTheme();
   const [selectedModel, setSelectedModel] = useState("gpt-4");
   const [expandedModel, setExpandedModel] = useState<string | null>(null);
@@ -29,11 +130,11 @@ export default function ModelAIScreen({
   const aiModels = [
     {
       id: "gemini-pro",
-      name: "Gemini Pro",
+      name: "Gemini AI",
       description: "Multimodal dengan pemahaman kontekstual",
       detailedDescription:
         "Model Google dengan kemampuan multimodal native (teks, gambar, audio, video). Terintegrasi dengan ecosystem Google dan memiliki pemahaman kontekstual yang kuat untuk percakapan panjang dan tugas multitasking.",
-      icon: "globe-outline",
+      image: require("../../assets/images/logo gemini new.jpg"),
       color: "#007AFF",
       version: "Google",
       features: [
@@ -47,6 +148,138 @@ export default function ModelAIScreen({
         "Research dengan Google",
         "Percakapan panjang",
         "Multitasking",
+      ],
+    },
+    {
+      id: "deepseek-ai",
+      name: "DeepSeek AI",
+      description: "Model AI efisien untuk penalaran logis",
+      detailedDescription:
+        "DeepSeek AI dikembangkan untuk memberikan performa penalaran logis dan matematika yang luar biasa dengan efisiensi komputasi yang tinggi.",
+      image: require("../../assets/images/DeepSeek AI (@deepseek_ai) • Instagram photos and videos.jpg"),
+      color: "#4D6B9C",
+      version: "DeepSeek",
+      features: [
+        "Logical Reasoning",
+        "Math Proficiency",
+        "Code Generation",
+        "Efficient Sampling",
+      ],
+      bestFor: [
+        "Coding",
+        "Penyelesaian Masalah",
+        "Analisis Logika",
+        "Pengembangan Software",
+      ],
+    },
+    {
+      id: "grok-xai",
+      name: "Grok xAI",
+      description: "AI dengan pemahaman real-time dari data X",
+      detailedDescription:
+        "Grok adalah AI yang dikembangkan oleh xAI milik Elon Musk, dirancang untuk memiliki sedikit humor dan wawasan luas melalui akses real-time ke platform X.",
+      image: require("../../assets/images/Elon Musk Says Grok 4 Will Replace 'Garbage' AI Data with Verified Facts _ EURweb _ Black News, Culture, Entertainment & More.jpg"),
+      color: "#000000",
+      version: "xAI",
+      features: [
+        "Real-time X Access",
+        "Conversational Wit",
+        "Trend Analysis",
+        "Independent Research",
+      ],
+      bestFor: [
+        "Berita Terkini",
+        "Analisis Tren Sosial",
+        "Pertanyaan Terbuka",
+        "Wawasan Real-time",
+      ],
+    },
+    {
+      id: "hugging-face",
+      name: "Hugging Face",
+      description: "Komunitas dan hub model open-source",
+      detailedDescription:
+        "Hugging Face adalah pusat dari pengembangan AI open-source, menyediakan ribuan model dan dataset untuk berbagai tugas pembelajaran mesin.",
+      image: require("../../assets/images/hugging  face.jpg"),
+      color: "#FFD21E",
+      version: "Community",
+      features: [
+        "Open Source Library",
+        "Transformers Support",
+        "Dataset Hub",
+        "Collaboration Tools",
+      ],
+      bestFor: [
+        "Riset AI",
+        "Model Spesifik Tugas",
+        "Open-weight Access",
+        "Eksperimen Model",
+      ],
+    },
+    {
+      id: "mistral-ai",
+      name: "Mistral AI",
+      description: "Model bahasa kuat dan efisien dari Eropa",
+      detailedDescription:
+        "Mistral AI menghadirkan model yang sangat efisien seperti Mistral 7B dan Mixtral, yang menawarkan performa tinggi dengan parameter yang lebih kecil.",
+      image: require("../../assets/images/Mistral AI rolls out mobile apps, revamped Le Chat, and set to announce major update today.jpg"),
+      color: "#F56040",
+      version: "Mistral",
+      features: [
+        "High Efficiency",
+        "Flash Attention",
+        "Customizable Weights",
+        "Multilingual",
+      ],
+      bestFor: [
+        "Deployment Ringan",
+        "Edge Computing",
+        "Bahasa Latin",
+        "Optimalisasi Biaya",
+      ],
+    },
+    {
+      id: "infra-ai",
+      name: "AI Infrastructure",
+      description: "Solusi infrastruktur untuk akselerasi AI",
+      detailedDescription:
+        "Infrastruktur modern yang mendukung pengembangan model skala besar dengan fokus pada performa inference dan skalabilitas sistem.",
+      image: require("../../assets/images/mC-qBnK3_400x400 infra.jpg"),
+      color: "#5AC8FA",
+      version: "Inference",
+      features: [
+        "High Scalability",
+        "Low Latency",
+        "Unified API",
+        "GPU Optimization",
+      ],
+      bestFor: [
+        "Skalabilitas Sistem",
+        "Production APIs",
+        "Kecepatan Respon",
+        "Batch Processing",
+      ],
+    },
+    {
+      id: "openrouter",
+      name: "OpenRouter",
+      description: "Unified API untuk akses berbagai model AI",
+      detailedDescription:
+        "OpenRouter menyediakan akses terpadu ke berbagai model AI terbaru dari OpenAI, Anthropic, Google, dan model open-source lainnya melalui satu API.",
+      image: require("../../assets/images/openrouter.png"),
+      color: "#651FFF",
+      version: "Unified API",
+      features: [
+        "Multi-model Access",
+        "One API Key",
+        "Leaderboard Model",
+        "Cost Optimized",
+      ],
+      bestFor: [
+        "Akses Model Beragam",
+        "Penyederhanaan API",
+        "Pencarian Model Terbaik",
+        "Fleksibilitas AI",
       ],
     },
   ];
@@ -91,9 +324,19 @@ export default function ModelAIScreen({
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.headerBackground, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: colors.headerBackground,
+            borderBottomColor: colors.border,
+          },
+        ]}
+      >
         <View style={styles.headerPlaceholder} />
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Model AI</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          Model AI
+        </Text>
         <TouchableOpacity
           style={styles.closeButton}
           onPress={() => {
@@ -112,70 +355,13 @@ export default function ModelAIScreen({
         {/* Pilih Model Section */}
         <View style={styles.section}>
           {aiModels.map((model) => (
-            <View key={model.id} style={[styles.modelCard, { borderColor: colors.border }]}>
-              <View style={[styles.modelItem, { backgroundColor: colors.cardBackground }]}>
-                <View style={styles.modelHeader}>
-                  <View
-                    style={[styles.modelIcon, { backgroundColor: model.color }]}
-                  >
-                    <Ionicons
-                      name={model.icon as any}
-                      size={20}
-                      color="#FFFFFF"
-                    />
-                  </View>
-                  <View style={styles.modelInfo}>
-                    <View style={styles.modelNameRow}>
-                      <Text style={[styles.modelName, { color: colors.text }]}>{model.name}</Text>
-                      <View style={styles.versionBadge}>
-                        <Text style={styles.versionText}>{model.version}</Text>
-                      </View>
-                    </View>
-                    <Text style={[styles.modelDescription, { color: colors.textSecondary }]}>
-                      {model.description}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Details Always Visible */}
-              <View style={[styles.detailsContainer, { backgroundColor: colors.inputBackground }]}>
-                <Text style={[styles.detailedDescription, { color: colors.text }]}>
-                  {model.detailedDescription}
-                </Text>
-
-                {/* Features Section */}
-                <View style={styles.featuresSection}>
-                  <Text style={[styles.featuresTitle, { color: colors.text }]}>Fitur Utama:</Text>
-                  <View style={styles.featuresGrid}>
-                    {model.features.map((feature, index) => (
-                      <View key={index} style={styles.featureBadge}>
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={14}
-                          color="#34C759"
-                        />
-                        <Text style={styles.featureText}>{feature}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Best For Section */}
-                <View style={styles.bestForSection}>
-                  <Text style={[styles.bestForTitle, { color: colors.text }]}>Cocok Untuk:</Text>
-                  <View style={styles.bestForGrid}>
-                    {model.bestFor.map((useCase, index) => (
-                      <View key={index} style={styles.useCaseBadge}>
-                        <Text style={styles.useCaseText}>{useCase}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-
-                {/* Model Stats */}
-              </View>
-            </View>
+            <ModelCard
+              key={model.id}
+              model={model}
+              isExpanded={expandedModel === model.id}
+              onToggle={toggleExpand}
+              colors={colors}
+            />
           ))}
         </View>
 
@@ -184,7 +370,9 @@ export default function ModelAIScreen({
       </ScrollView>
     </View>
   );
-}
+});
+
+export default ModelAIScreen;
 
 // Helper functions for ratings
 const getSpeedRating = (modelId: string) => {
@@ -303,12 +491,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modelIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
+    overflow: "hidden",
+  },
+  modelImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
   modelInfo: {
     flex: 1,

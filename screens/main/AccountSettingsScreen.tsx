@@ -18,6 +18,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  PanResponder,
 } from "react-native";
 import { useTheme } from "../../contexts/ThemeContext";
 import { RootStackParamList } from "../../types/navigation";
@@ -27,6 +28,8 @@ import ModelAIScreen from "./ModelAIScreen";
 import PrivacyPolicyScreen from "./PrivacyPolicyScreen";
 import TermsConditionsScreen from "./TermsConditionsScreen";
 import ThemeSettingsScreen from "./ThemeSettingsScreen";
+import ImagePickerModal from "./components/ImagePickerModal";
+import ImageViewerModal from "./components/ImageViewerModal";
 
 const { height } = Dimensions.get("window");
 
@@ -79,6 +82,42 @@ export default function AccountSettingsScreen({
   const themeFadeAnim = useRef(new Animated.Value(0)).current;
   const imagePickerSlideAnim = useRef(new Animated.Value(height)).current;
   const imagePickerFadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Swipe-to-dismiss Responder Factory
+  const createDismissResponder = (animValue: Animated.Value, onClose: () => void) => {
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dy) > Math.abs(gestureState.dx) && gestureState.dy > 5;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          animValue.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 100 || gestureState.vy > 0.5) {
+          onClose();
+        } else {
+          Animated.spring(animValue, {
+            toValue: 0,
+            velocity: gestureState.vy,
+            tension: 65,
+            friction: 10,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    });
+  };
+
+  const [responders] = useState(() => ({
+    modelAI: createDismissResponder(modelAISlideAnim, () => setShowModelAI(false)),
+    terms: createDismissResponder(termsSlideAnim, () => setShowTerms(false)),
+    privacy: createDismissResponder(privacySlideAnim, () => setShowPrivacy(false)),
+    theme: createDismissResponder(themeSlideAnim, () => setShowTheme(false)),
+    imagePicker: createDismissResponder(imagePickerSlideAnim, () => setShowImagePicker(false)),
+  }));
 
   // Load user data immediately and synchronously
   if (isInitialMount.current) {
@@ -737,7 +776,7 @@ export default function AccountSettingsScreen({
       {/* Model AI Modal Overlay */}
       <Animated.View
         style={[styles.modelAIOverlay, { opacity: modelAIFadeAnim }]}
-        pointerEvents={showModelAI ? "auto" : "none"}
+        pointerEvents={(showModelAI || renderModelAI) ? "auto" : "none"}
       >
         <TouchableOpacity
           style={styles.overlayTouchable}
@@ -754,8 +793,11 @@ export default function AccountSettingsScreen({
             transform: [{ translateY: modelAISlideAnim }],
           },
         ]}
-        pointerEvents={showModelAI ? "auto" : "none"}
+        pointerEvents={(showModelAI || renderModelAI) ? "auto" : "none"}
       >
+        <View {...responders.modelAI.panHandlers} style={styles.dragHandleArea}>
+          <View style={styles.dragHandleIndicator} />
+        </View>
         {(showModelAI || renderModelAI) && (
           <ModelAIScreen
             navigation={navigation}
@@ -767,7 +809,7 @@ export default function AccountSettingsScreen({
       {/* Terms Modal Overlay */}
       <Animated.View
         style={[styles.modelAIOverlay, { opacity: termsFadeAnim }]}
-        pointerEvents={showTerms ? "auto" : "none"}
+        pointerEvents={(showTerms || renderTerms) ? "auto" : "none"}
       >
         <TouchableOpacity
           style={styles.overlayTouchable}
@@ -782,7 +824,7 @@ export default function AccountSettingsScreen({
           styles.fullScreenModal,
           { transform: [{ translateY: termsSlideAnim }] },
         ]}
-        pointerEvents={showTerms ? "auto" : "none"}
+        pointerEvents={(showTerms || renderTerms) ? "auto" : "none"}
       >
         {(showTerms || renderTerms) && (
           <TermsConditionsScreen
@@ -795,7 +837,7 @@ export default function AccountSettingsScreen({
       {/* Privacy Modal Overlay */}
       <Animated.View
         style={[styles.modelAIOverlay, { opacity: privacyFadeAnim }]}
-        pointerEvents={showPrivacy ? "auto" : "none"}
+        pointerEvents={(showPrivacy || renderPrivacy) ? "auto" : "none"}
       >
         <TouchableOpacity
           style={styles.overlayTouchable}
@@ -810,7 +852,7 @@ export default function AccountSettingsScreen({
           styles.fullScreenModal,
           { transform: [{ translateY: privacySlideAnim }] },
         ]}
-        pointerEvents={showPrivacy ? "auto" : "none"}
+        pointerEvents={(showPrivacy || renderPrivacy) ? "auto" : "none"}
       >
         {(showPrivacy || renderPrivacy) && (
           <PrivacyPolicyScreen
@@ -823,7 +865,7 @@ export default function AccountSettingsScreen({
       {/* Edit Profile Modal Overlay */}
       <Animated.View
         style={[styles.modelAIOverlay, { opacity: editProfileFadeAnim }]}
-        pointerEvents={showEditProfile ? "auto" : "none"}
+        pointerEvents={(showEditProfile || renderEditProfile) ? "auto" : "none"}
       >
         <TouchableOpacity
           style={styles.overlayTouchable}
@@ -838,7 +880,7 @@ export default function AccountSettingsScreen({
           styles.editProfileModal,
           { transform: [{ translateY: editProfileSlideAnim }] },
         ]}
-        pointerEvents={showEditProfile ? "auto" : "none"}
+        pointerEvents={(showEditProfile || renderEditProfile) ? "auto" : "none"}
       >
         {(showEditProfile || renderEditProfile) && (
           <EditProfileScreen
@@ -854,7 +896,7 @@ export default function AccountSettingsScreen({
       {/* Theme Modal Overlay */}
       <Animated.View
         style={[styles.modelAIOverlay, { opacity: themeFadeAnim }]}
-        pointerEvents={showTheme ? "auto" : "none"}
+        pointerEvents={(showTheme || renderTheme) ? "auto" : "none"}
       >
         <TouchableOpacity
           style={styles.overlayTouchable}
@@ -871,8 +913,11 @@ export default function AccountSettingsScreen({
             transform: [{ translateY: themeSlideAnim }],
           },
         ]}
-        pointerEvents={showTheme ? "auto" : "none"}
+        pointerEvents={(showTheme || renderTheme) ? "auto" : "none"}
       >
+        <View {...responders.theme.panHandlers} style={styles.dragHandleArea}>
+          <View style={styles.dragHandleIndicator} />
+        </View>
         {(showTheme || renderTheme) && (
           <ThemeSettingsScreen
             navigation={navigation}
@@ -884,7 +929,7 @@ export default function AccountSettingsScreen({
       {/* Image Picker Modal Overlay */}
       <Animated.View
         style={[styles.modelAIOverlay, { opacity: imagePickerFadeAnim }]}
-        pointerEvents={showImagePicker ? "auto" : "none"}
+        pointerEvents={(showImagePicker || renderImagePicker) ? "auto" : "none"}
       >
         <TouchableOpacity
           style={styles.overlayTouchable}
@@ -901,75 +946,24 @@ export default function AccountSettingsScreen({
             transform: [{ translateY: imagePickerSlideAnim }],
           },
         ]}
-        pointerEvents={showImagePicker ? "auto" : "none"}
+        pointerEvents={(showImagePicker || renderImagePicker) ? "auto" : "none"}
       >
         {(showImagePicker || renderImagePicker) && (
-          <View style={[styles.imagePickerContainer, { backgroundColor: colors.background }]}>
-            <View style={[styles.imagePickerHeader, { backgroundColor: colors.headerBackground, borderBottomColor: colors.border }]}>
-              <View style={styles.headerPlaceholder} />
-              <Text style={[styles.headerTitle, { color: colors.text }]}>Pilih Foto Profil</Text>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setShowImagePicker(false)}
-              >
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.imagePickerContent}>
-              <TouchableOpacity
-                style={[styles.imageSourceCard, { backgroundColor: "#FFFFFF", borderColor: colors.border }]}
-                onPress={() => handleImageSource("camera")}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.imageSourceIcon, { backgroundColor: "#FFFFFF" }]}>
-                  <Ionicons name="camera" size={24} color="#007AFF" />
-                </View>
-                <Text style={[styles.imageSourceText, { color: colors.text }]}>Kamera</Text>
-                <Ionicons name="chevron-forward" size={20} color="#C6C6C8" />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.imageSourceCard, { backgroundColor: "#FFFFFF", borderColor: colors.border }]}
-                onPress={() => handleImageSource("gallery")}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.imageSourceIcon, { backgroundColor: "#FFFFFF" }]}>
-                  <Ionicons name="images" size={24} color="#34C759" />
-                </View>
-                <Text style={[styles.imageSourceText, { color: colors.text }]}>Galeri</Text>
-                <Ionicons name="chevron-forward" size={20} color="#C6C6C8" />
-              </TouchableOpacity>
-            </View>
-          </View>
+          <ImagePickerModal
+            colors={colors}
+            onClose={() => setShowImagePicker(false)}
+            onSelectSource={handleImageSource}
+            panHandlers={responders.imagePicker.panHandlers}
+          />
         )}
       </Animated.View>
 
       {/* Image Viewer Modal */}
       {showImageViewer && profileImage && (
-        <View style={styles.imageViewerOverlay}>
-          <TouchableOpacity
-            style={styles.imageViewerBackdrop}
-            activeOpacity={1}
-            onPress={() => setShowImageViewer(false)}
-          >
-            <View style={styles.imageViewerHeader}>
-              <TouchableOpacity
-                style={styles.imageViewerCloseButton}
-                onPress={() => setShowImageViewer(false)}
-              >
-                <Ionicons name="close" size={32} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.imageViewerContent}>
-              <Image
-                source={{ uri: profileImage }}
-                style={styles.imageViewerImage}
-                resizeMode="contain"
-              />
-            </View>
-          </TouchableOpacity>
-        </View>
+        <ImageViewerModal
+          imageUrl={profileImage}
+          onClose={() => setShowImageViewer(false)}
+        />
       )}
     </SafeAreaView>
   );
@@ -1329,5 +1323,22 @@ const styles = StyleSheet.create({
   imageViewerImage: {
     width: "100%",
     height: "100%",
+  },
+  dragHandleArea: {
+    position: 'absolute',
+    top: 0,
+    left: '20%',
+    right: '20%',
+    height: 48,
+    zIndex: 9999,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 12,
+  },
+  dragHandleIndicator: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#C6C6C8',
   },
 });

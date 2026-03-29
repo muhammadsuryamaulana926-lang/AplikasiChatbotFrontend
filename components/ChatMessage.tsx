@@ -52,8 +52,8 @@ export const ChatMessage = React.memo(({
           style={[
             styles.messageBubble,
             item.sender === "user" 
-              ? { backgroundColor: colors.userBubble } 
-              : { backgroundColor: colors.botBubble },
+              ? { backgroundColor: colors.userBubble, borderTopRightRadius: 4 } 
+              : { backgroundColor: colors.botBubble, borderTopLeftRadius: 4 },
           ]}
         >
           <MessageTextWithLinks
@@ -107,7 +107,7 @@ export const ChatMessage = React.memo(({
 
 const styles = StyleSheet.create({
   messageRowContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     marginVertical: 4,
   },
   systemMessageContainer: {
@@ -132,9 +132,9 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
   },
   messageBubble: {
-    maxWidth: "80%",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    maxWidth: "92%",
+    paddingHorizontal: 18,
+    paddingVertical: 14,
     borderRadius: 20,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },

@@ -187,17 +187,28 @@ const HistoryItem = React.memo(({
                 multiline={false}
               />
             ) : (
-              <Text
-                style={[
-                  styles.historyItemTitle,
-                  item.unread && styles.historyTitleUnread,
-                  isPinned && styles.historyTitlePinned,
-                  { color: colors.text }
-                ]}
-                numberOfLines={1}
-              >
-                {item.title}
-              </Text>
+              <View style={styles.historyTextContainer}>
+                <Text
+                  style={[
+                    styles.historyItemTitle,
+                    item.unread && styles.historyTitleUnread,
+                    isPinned && styles.historyTitlePinned,
+                    { color: colors.text }
+                  ]}
+                  numberOfLines={1}
+                >
+                  {item.title}
+                </Text>
+                <Text
+                  style={[
+                    styles.historyItemPreview,
+                    { color: colors.textSecondary }
+                  ]}
+                  numberOfLines={1}
+                >
+                  {item.preview}
+                </Text>
+              </View>
             )}
           </View>
         </View>
@@ -542,6 +553,7 @@ const styles = StyleSheet.create({
   },
   historyItem: {
     flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 8,
     borderColor: "transparent",
     zIndex: 1,
@@ -588,12 +600,19 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     paddingHorizontal: 4,
   },
+  historyTextContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
   historyItemTitle: {
-    paddingTop: 4,
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: "600",
     color: "#000000",
-    alignItems: "center",
+    marginBottom: 2,
+  },
+  historyItemPreview: {
+    fontSize: 12,
+    color: "#8E8E93",
   },
   historyTitleUnread: {
     fontWeight: "700",

@@ -1,9 +1,9 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { RouteProp, useFocusEffect, useNavigation } from "@react-navigation/native";
+import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { LinearGradient } from "expo-linear-gradient";
-import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import * as Clipboard from "expo-clipboard";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Animated,
@@ -12,7 +12,6 @@ import {
   Image,
   Keyboard,
   KeyboardAvoidingView,
-  LayoutAnimation,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -21,26 +20,21 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  UIManager,
-  View,
+  View
 } from "react-native";
-import * as Clipboard from "expo-clipboard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ChatMessage } from "../../components/ChatMessage";
+import { MenuSidebar } from "../../components/MenuSidebar";
 import { API_CONFIG } from "../../config/api-config";
+import { useTheme } from "../../contexts/ThemeContext";
 import { RootStackParamList } from "../../types/navigation";
+import { loadPinnedChats, sortChatHistory } from "../../utils/pinChatUtils";
+import { MODAL_ANIMATION_DURATION, playModalSound, playModalSoundWithVibration } from "../../utils/soundUtils";
 import {
   formatDateSeparator,
-  formatRelativeTime,
-  isSameDay,
+  isSameDay
 } from "../../utils/timeUtils";
-import { playModalSound, playModalSoundWithVibration, MODAL_ANIMATION_DURATION } from "../../utils/soundUtils";
-import { loadPinnedChats, savePinnedChats, togglePinChat, sortChatHistory } from "../../utils/pinChatUtils";
-import { SwipeableChatItem } from "../../components/SwipeableChatItem";
 import AccountSettingsScreen from "./AccountSettingsScreen";
-import { useTheme } from "../../contexts/ThemeContext";
-import { MessageTextWithLinks } from "../../components/MessageTextWithLinks";
-import { MenuSidebar } from "../../components/MenuSidebar";
-import { ChatMessage } from "../../components/ChatMessage";
 
 const { width, height } = Dimensions.get("window");
 const Colors = {
@@ -68,7 +62,7 @@ type MessageType = {
   timestamp: Date;
   isConfirmation?: boolean;
   originalQuestion?: string;
-  options?: Array<{text: string, action: string}>;
+  options?: Array<{ text: string, action: string }>;
 };
 
 type ChatHistoryType = {
@@ -93,13 +87,13 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
   const [messages, setMessages] = useState<MessageType[]>(
     actionTitle
       ? [
-          {
-            id: "1",
-            text: actionTitle,
-            sender: "bot",
-            timestamp: new Date(),
-          },
-        ]
+        {
+          id: "1",
+          text: actionTitle,
+          sender: "bot",
+          timestamp: new Date(),
+        },
+      ]
       : [],
   );
   const [currentChatTitle, setCurrentChatTitle] = useState<string>("");
@@ -161,7 +155,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
     const showSub = Keyboard.addListener(showEvent, (e) => {
       setKeyboardHeight(e.endCoordinates.height);
       setKeyboardVisible(true);
-      
+
       if (messages.length === 0 && Platform.OS === 'ios') {
         Animated.timing(welcomeKeyboardAnim, {
           toValue: -e.endCoordinates.height / 2,
@@ -175,7 +169,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
     const hideSub = Keyboard.addListener(hideEvent, (e) => {
       setKeyboardHeight(0);
       setKeyboardVisible(false);
-      
+
       if (messages.length === 0 && Platform.OS === 'ios') {
         Animated.timing(welcomeKeyboardAnim, {
           toValue: 0,
@@ -247,10 +241,10 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
     checkLoginStatus();
     checkConnection();
     loadChatHistory();
-    
+
     // Load pinned chats
     loadPinnedChats().then(setPinnedChatIds);
-    
+
     // Load profile image on mount
     const loadInitialProfileImage = async () => {
       try {
@@ -293,7 +287,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
           useNativeDriver: true,
         }),
       ]).start();
-      
+
       // Animasi shimmer berulang
       Animated.loop(
         Animated.timing(shimmerAnim, {
@@ -333,7 +327,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
           setProfileImageError(true);
         }
       };
-      
+
       loadProfileImage();
     }, [])
   );
@@ -507,44 +501,37 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
     }
   };
 
-  const scrollToBottom = useCallback((animated = true) => {
-    if (groupedMessages.length > 0 && flatListRef.current) {
-      try {
-        const lastSectionIndex = groupedMessages.length - 1;
-        const lastItemIndex = groupedMessages[lastSectionIndex].data.length - 1;
-        
-        if (lastItemIndex >= 0) {
-          // Use setTimeout to ensure the list has finished its render cycle
-          setTimeout(() => {
-            try {
-              flatListRef.current?.scrollToLocation({
-                sectionIndex: lastSectionIndex,
-                itemIndex: lastItemIndex,
-                animated,
-                viewPosition: 0.5, // Center position sometimes more reliable than 1 or 0
-              });
-              
-              // Second attempt specifically for bottom alignment if animated
-              if (animated) {
-                setTimeout(() => {
-                  flatListRef.current?.scrollToLocation({
-                    sectionIndex: lastSectionIndex,
-                    itemIndex: lastItemIndex,
-                    animated: true,
-                    viewPosition: 1,
-                  });
-                }, 100);
-              }
-            } catch (e) {
-              console.log("ScrollToLocation inner error:", e);
-            }
-          }, 50);
-        }
-      } catch (e) {
-        console.log("ScrollToBottom error:", e);
-      }
-    }
+  const groupedMessagesRef = useRef(groupedMessages);
+  useEffect(() => {
+    groupedMessagesRef.current = groupedMessages;
   }, [groupedMessages]);
+
+  const lastMainScrollTimeRef = useRef(0);
+  const scrollToBottom = useCallback((animated = true) => {
+    if (groupedMessagesRef.current.length > 0 && flatListRef.current) {
+      const now = Date.now();
+      // Mencegah scroll yang dipicu terlalu sering (throttle 500ms) 
+      // yang menyebabkan layar lompat-lompat saat animasi loading
+      if (now - lastMainScrollTimeRef.current < 500 && animated) return;
+
+      lastMainScrollTimeRef.current = now;
+
+      setTimeout(() => {
+        try {
+          if (flatListRef.current) {
+            const responder = (flatListRef.current as any).getScrollResponder();
+            if (responder && typeof responder.scrollToEnd === 'function') {
+              responder.scrollToEnd({ animated });
+            } else {
+              (flatListRef.current as any).scrollToEnd({ animated });
+            }
+          }
+        } catch (e) {
+          // Silent catch
+        }
+      }, animated ? 200 : 50); // Tambahkan jeda sedikit lebih lama agar layout stabil
+    }
+  }, []);
 
   const handleSend = async () => {
     if (!inputText.trim() || isLoading) return;
@@ -562,34 +549,35 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
     setMessages((prev) => [...prev, userMessage]);
     setInputText("");
     setIsLoading(true);
-    
+    scrollToBottom(true);
+
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
     const timeoutId = setTimeout(() => abortController.abort(), 120000); // 120 detik timeout (2 menit)
-    
+
     try {
       console.log("🔍 Mengirim ke backend...");
-      
+
       // Ambil userEmail dan userId dari AsyncStorage
       const userEmail = await AsyncStorage.getItem("userEmail");
       const userId = await AsyncStorage.getItem("userId") || "default";
-      
+
       const response = await fetch(`${API_CONFIG.BACKEND_URL}/api/query`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "ngrok-skip-browser-warning": "true",
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           question: currentInput,
           userId: userId,
-          userEmail: userEmail 
+          userEmail: userEmail
         }),
         signal: abortController.signal,
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       if (!response.ok) {
         throw new Error(`Error backend: ${response.status}`);
       }
@@ -603,7 +591,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
         }
         throw new Error(data.error || "Terjadi kesalahan");
       }
-      
+
       // Handle confirmation response
       if (data.result && typeof data.result === 'object' && data.result.type === 'confirmation') {
         const confirmationMessage: MessageType = {
@@ -623,7 +611,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
         scrollToBottom(true);
         return;
       }
-      
+
       // Handle normal response (answer or error)
       const botResponseText = typeof data.result === 'object' ? data.result.message : data.result;
       const source = data.source || "unknown";
@@ -631,10 +619,9 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
         `📦 Response dari ${source}:`,
         typeof botResponseText === 'string' ? botResponseText.substring(0, 100) : String(botResponseText),
       );
-      const sourceIndicator = source === "database" ? "📊 " : "🤖 ";
       const botMessage: MessageType = {
         id: `bot-${Date.now()}`,
-        text: `${sourceIndicator}${botResponseText || 'Tidak ada respons'}`,
+        text: botResponseText || 'Tidak ada respons',
         sender: "bot",
         timestamp: new Date(),
       };
@@ -646,7 +633,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
       scrollToBottom(true);
     } catch (error: any) {
       clearTimeout(timeoutId);
-      
+
       // Jika error karena dibatalkan (AbortError), jangan log sebagai error merah
       if (error.name === 'AbortError') {
         console.log("🔍 [handleSend] Request dibatalkan atau timeout (AbortError)");
@@ -654,9 +641,9 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
       }
 
       console.error("❌ Error di handleSend:", error);
-      
+
       let errorText = "❌ Maaf, terjadi kesalahan. Mohon periksa:\n1. Koneksi internet\n2. Backend berjalan\n3. Database aktif";
-      
+
       const errorMessage: MessageType = {
         id: `error-${Date.now()}`,
         text: errorText,
@@ -707,7 +694,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
         setCurrentChatId(data.chatId);
         setCurrentChatTitle(data.title || currentChatTitle);
       }
-      
+
       // Refresh history sidebar
       loadChatHistory(true);
     } catch (error) {
@@ -778,48 +765,48 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
     setShowLogoutModal(true);
   };
 
-useEffect(() => {
+  useEffect(() => {
     if (!isLoading) {
       setLoadingDots(0);
       return;
     }
-    
+
     const interval = setInterval(() => {
       setLoadingDots((prev) => (prev >= 3 ? 0 : prev + 1));
     }, 500);
-    
+
     return () => clearInterval(interval);
   }, [isLoading]);
 
   const loadChatHistory = async (preserveScroll = false) => {
     try {
       const userEmail = await AsyncStorage.getItem("userEmail");
-      
+
       if (!userEmail) {
         return;
       }
-      
+
       let savedScrollPosition = 0;
       if (preserveScroll) {
         savedScrollPosition = scrollPositionRef.current;
       }
-      
+
       const url = `${API_CONFIG.BACKEND_URL}/api/chat/history/${encodeURIComponent(userEmail)}`;
-      
+
       const response = await fetch(url, {
         method: "GET",
         headers: {
           "ngrok-skip-browser-warning": "true",
         },
       });
-      
+
       if (!response.ok) {
         Alert.alert("Debug Info", `Backend error: ${response.status} ${response.statusText}`);
         return;
       }
-      
+
       const data = await response.json();
-      
+
       let chatHistoryData = [];
       if (Array.isArray(data)) {
         chatHistoryData = data;
@@ -828,7 +815,7 @@ useEffect(() => {
       } else {
         return;
       }
-      
+
       if (chatHistoryData.length > 0) {
         const parsedHistory = chatHistoryData.map((item: any, chatIdx: number) => {
           const messages = (item.messages || []).map((msg: any, msgIdx: number) => ({
@@ -837,27 +824,31 @@ useEffect(() => {
             sender: msg.sender || (msg.peran === 'user' ? 'user' : 'bot'),
             timestamp: new Date(msg.timestamp || msg.dibuat_pada || Date.now()),
           }));
-          
+
+          const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
+          const senderLabel = lastMsg ? (lastMsg.sender === 'user' ? 'Anda: ' : 'AI: ') : '';
+          const lastMessageText = lastMsg ? `${senderLabel}${lastMsg.text.replace(/\n/g, ' ')}` : '';
+
           return {
             id: item.id.toString(),
             title: item.title || item.judul || 'Untitled',
-            preview: item.preview || (item.title || item.judul || 'No preview'),
+            preview: lastMessageText || item.preview || (item.title || item.judul || 'No preview'),
             timestamp: new Date(item.timestamp || item.diperbarui_pada || item.dibuat_pada),
             messages: messages,
             unread: item.unread || false,
             isPinned: item.isPinned || false
           };
         });
-        
+
         const sortedHistory = sortChatHistory(parsedHistory, pinnedChatIds);
         setChatHistory(sortedHistory as ChatHistoryType[]);
 
-        
+
         if (preserveScroll && savedScrollPosition > 0 && !isScrollingRef.current) {
           if (scrollRestoreTimeoutRef.current) {
             clearTimeout(scrollRestoreTimeoutRef.current);
           }
-          
+
           scrollRestoreTimeoutRef.current = setTimeout(() => {
             if (historyScrollRef.current && !isScrollingRef.current) {
               historyScrollRef.current.scrollTo({
@@ -902,51 +893,31 @@ useEffect(() => {
       editInputRef.current?.blur();
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    
+
     if (history.messages && history.messages.length > 0) {
       setMessages(history.messages);
     } else {
       setMessages([]);
     }
-    
+
     setCurrentChatTitle(history.title);
     setCurrentChatId(history.id);
     setIsLoading(false);
     setShowMenu(false);
-    
+
     const updatedHistory = chatHistory.map((item) =>
       item.id === history.id ? { ...item, unread: false } : item,
     );
     setChatHistory(updatedHistory);
-    
+
     setTimeout(() => {
-      scrollToBottom(false); // First jump immediately
-      setTimeout(() => {
-        scrollToBottom(true); // Then ensure it's at the very bottom
-      }, 150);
+      scrollToBottom(false);
     }, 300);
   };
 
 
   const scrollToBottomSmooth = () => {
-    // Direct call to flatListRef for most immediate response
-    if (groupedMessages.length > 0 && flatListRef.current) {
-      const lastSectionIdx = groupedMessages.length - 1;
-      const lastItemIdx = groupedMessages[lastSectionIdx].data.length - 1;
-      
-      try {
-        flatListRef.current.scrollToLocation({
-          sectionIndex: lastSectionIdx,
-          itemIndex: lastItemIdx,
-          animated: true,
-          viewPosition: 1
-        });
-      } catch (e) {
-        scrollToBottom(true);
-      }
-    } else {
-      scrollToBottom(true);
-    }
+    scrollToBottom(true);
 
     setShowScrollToBottom(false);
     Animated.timing(scrollButtonOpacity, {
@@ -975,11 +946,11 @@ useEffect(() => {
   };
 
   const renderMessage = useCallback(({ item }: { item: MessageType }) => (
-    <ChatMessage 
-      item={item} 
-      colors={colors} 
-      copyToClipboard={copyToClipboard} 
-      handleConfirmation={handleConfirmation} 
+    <ChatMessage
+      item={item}
+      colors={colors}
+      copyToClipboard={copyToClipboard}
+      handleConfirmation={handleConfirmation}
     />
   ), [colors, copyToClipboard, handleConfirmation]);
 
@@ -992,7 +963,7 @@ useEffect(() => {
           <TouchableOpacity
             style={styles.deleteModalBackdrop}
             activeOpacity={1}
-            onPress={() => {}}
+            onPress={() => { }}
           />
           <View style={styles.deleteModalContainer}>
             <Text style={styles.deleteModalTitle}>Akun Dinonaktifkan</Text>
@@ -1064,7 +1035,7 @@ useEffect(() => {
                     // Extract numeric ID from session_XX format
                     const numericId = deleteItemId.replace('session_', '');
                     console.log('Deleting chat with ID:', numericId);
-                    
+
                     const response = await fetch(
                       `${API_CONFIG.BACKEND_URL}/api/chat-history/${numericId}`,
                       {
@@ -1075,10 +1046,10 @@ useEffect(() => {
                         },
                       },
                     );
-                    
+
                     const data = await response.json();
                     console.log('Delete response:', data);
-                    
+
                     if (data.success) {
                       await loadChatHistory();
                       if (currentChatId === deleteItemId) {
@@ -1336,7 +1307,7 @@ useEffect(() => {
                 },
               ]}
             >
-              <MaterialIcons name="smart-toy" size={100} color="#007AFF" />
+              <MaterialIcons name="assistant" size={100} color="#007AFF" />
             </Animated.View>
             <View style={styles.welcomeTextContainer}>
               <View style={{ overflow: 'hidden' }}>
@@ -1393,16 +1364,21 @@ useEffect(() => {
             { paddingBottom: keyboardHeight > 0 ? 10 : 80 },
           ]}
           showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => {
-            setTimeout(() => scrollToBottom(true), 150);
+          onContentSizeChange={(w, h) => {
+            // Hanya auto-scroll saat pertama kali loading dimulai 
+            // agar layar tetap di bawah tanpa goyang karena animasi dots.
+            if (isLoading && !showScrollToBottom) {
+              scrollToBottom(true);
+            }
           }}
           onScroll={(e) => {
             const offsetY = e.nativeEvent.contentOffset.y;
             const contentHeight = e.nativeEvent.contentSize.height;
             const scrollViewHeight = e.nativeEvent.layoutMeasurement.height;
-            const isNearBottom = offsetY + scrollViewHeight >= contentHeight - 200;
+            // Gunakan rentang yang lebih masuk akal (150) agar tombol muncul saat benar-benar diperlukan
+            const isNearBottom = offsetY + scrollViewHeight >= contentHeight - 150;
             const shouldShow = !isNearBottom && messages.length > 0;
-            
+
             if (shouldShow !== showScrollToBottom) {
               setShowScrollToBottom(shouldShow);
               Animated.timing(scrollButtonOpacity, {
@@ -1414,6 +1390,7 @@ useEffect(() => {
           }}
           scrollEventThrottle={16}
           ListFooterComponent={isLoading ? (
+
             <View style={styles.typingIndicatorInline}>
               <View style={[styles.typingBubble, { backgroundColor: colors.botBubble }]}>
                 <View style={styles.typingDots}>

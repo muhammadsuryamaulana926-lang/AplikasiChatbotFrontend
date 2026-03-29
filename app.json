@@ -4,7 +4,7 @@
     "slug": "asisten-chatbot-ai",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo 1024.png",
+    "icon": "./assets/images/logo 1024.png",  
     "scheme": "asisten-chatbot-ai",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -49,7 +49,9 @@
         {
           "icon": "./assets/images/android-icon-foreground.png",
           "color": "#007AFF",
-          "sounds": ["./assets/notification_sound.mp3"]
+          "sounds": [
+            "./assets/notification_sound.mp3"
+          ]
         }
       ],
       "@react-native-google-signin/google-signin",

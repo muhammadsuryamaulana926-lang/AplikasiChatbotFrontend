@@ -19,10 +19,10 @@ type TermsConditionsScreenProps = {
   onClose?: () => void;
 };
 
-export default function TermsConditionsScreen({
+const TermsConditionsScreen = React.memo(({
   navigation,
   onClose,
-}: TermsConditionsScreenProps) {
+}: TermsConditionsScreenProps) => {
   const { colors } = useTheme();
   const sections = [
     {
@@ -213,7 +213,9 @@ export default function TermsConditionsScreen({
       </View>
     </View>
   );
-}
+});
+
+export default TermsConditionsScreen;
 
 const styles = StyleSheet.create({
   mainContainer: {

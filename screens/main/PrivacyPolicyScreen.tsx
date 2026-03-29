@@ -21,10 +21,10 @@ type PrivacyPolicyScreenProps = {
   onClose?: () => void;
 };
 
-export default function PrivacyPolicyScreen({
+const PrivacyPolicyScreen = React.memo(({
   navigation,
   onClose,
-}: PrivacyPolicyScreenProps) {
+}: PrivacyPolicyScreenProps) => {
   const { colors } = useTheme();
 
   // Handle hardware back button
@@ -300,7 +300,9 @@ export default function PrivacyPolicyScreen({
       </View>
     </View>
   );
-}
+});
+
+export default PrivacyPolicyScreen;
 
 const styles = StyleSheet.create({
   mainContainer: {

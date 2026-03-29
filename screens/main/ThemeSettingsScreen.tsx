@@ -17,10 +17,10 @@ type ThemeSettingsScreenProps = {
   onClose?: () => void;
 };
 
-export default function ThemeSettingsScreen({
+const ThemeSettingsScreen = React.memo(({
   navigation,
   onClose,
-}: ThemeSettingsScreenProps) {
+}: ThemeSettingsScreenProps) => {
   const { theme, toggleTheme, colors } = useTheme();
   const [selectedTheme, setSelectedTheme] = useState(theme);
 
@@ -108,7 +108,9 @@ export default function ThemeSettingsScreen({
       </ScrollView>
     </View>
   );
-}
+});
+
+export default ThemeSettingsScreen;
 
 const styles = StyleSheet.create({
   safeArea: {

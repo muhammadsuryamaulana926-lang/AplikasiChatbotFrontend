@@ -80,7 +80,7 @@ Mengembangkan aplikasi mobile berbasis AI yang dapat membantu pengguna dalam men
 3. **Mengintegrasikan AI untuk Respons Otomatis**
    - Menghubungkan aplikasi dengan Google Gemini AI
    - Membuat sistem fallback ke database lokal jika AI tidak dapat menjawab
-   - Mengimplementasikan indikator sumber jawaban (AI atau Database)
+      - Memastikan respons AI yang cepat dan relevan
 
 4. **Membangun Sistem Manajemen Riwayat Chat**
    - Menyimpan semua percakapan pengguna ke database
@@ -733,7 +733,6 @@ const handleLogin = async () => {
   - Bubble chat user (kanan, biru)
   - Bubble chat bot (kiri, abu-abu)
   - Timestamp setiap pesan
-  - Indikator sumber jawaban (📊 Database / 🤖 AI)
   - Long press untuk copy pesan
   - Date separator (Hari ini, Kemarin, dll)
 - Loading indicator saat AI memproses
@@ -1329,7 +1328,7 @@ const aiAnswer = data.candidates[0].content.parts[0].text;
 3. Jika tidak ada jawaban, kirim ke Gemini AI
 4. AI proses dan return jawaban
 5. Backend kirim jawaban ke app
-6. App tampilkan dengan indikator sumber (🤖 AI)
+6. App tampilkan respons dari AI/Database
 
 ---
 
@@ -1588,7 +1587,7 @@ const checkSession = async () => {
 6. Backend memproses:
    - Cek database lokal untuk jawaban
    - Jika tidak ada, kirim ke Gemini AI
-   - Return jawaban dengan indikator sumber
+   - Return jawaban secara langsung ke frontend
 7. Pesan bot ditampilkan di chat (bubble abu, kiri)
 8. Percakapan auto-save ke database
 

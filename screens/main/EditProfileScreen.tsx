@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import React, { useEffect, useRef, useState } from "react";
+import React, { memo, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -32,10 +32,10 @@ type EditProfileScreenProps = {
   onClose?: () => void;
 };
 
-export default function EditProfileScreen({
+const EditProfileScreen = ({
   navigation,
   onClose,
-}: EditProfileScreenProps) {
+}: EditProfileScreenProps) => {
   const { colors } = useTheme();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -47,12 +47,12 @@ export default function EditProfileScreen({
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const buttonBottomAnim = useState(new Animated.Value(0))[0];
+  const buttonBottomAnim = useRef(new Animated.Value(0)).current;
   const lastKeyboardHeight = useRef(0);
   const successModalAnim = useRef(new Animated.Value(0)).current;
   const skeletonAnim = useRef(new Animated.Value(0)).current;
 
-  const insets = useSafeAreaInsets(); // Mengambil margin aman layar
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const backAction = () => {
@@ -65,7 +65,6 @@ export default function EditProfileScreen({
       backAction,
     );
 
-    // Skeleton animation
     Animated.loop(
       Animated.sequence([
         Animated.timing(skeletonAnim, {
@@ -248,7 +247,6 @@ export default function EditProfileScreen({
     >
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
-      {/* Header Dinamis */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <View style={styles.headerPlaceholder} />
         <Text style={[styles.headerTitle, { color: colors.text }]}>
@@ -268,7 +266,6 @@ export default function EditProfileScreen({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Profile Section Skeleton */}
           <View style={styles.section}>
             <Animated.View
               style={[
@@ -301,65 +298,11 @@ export default function EditProfileScreen({
               />
               <Animated.View
                 style={[
-                  styles.inputContainer,
-                  styles.skeletonBox,
-                  {
-                    opacity: skeletonAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.3, 0.7],
-                    }),
-                  },
-                ]}
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Animated.View
-                style={[
                   styles.skeletonText,
                   {
-                    width: 50,
-                    height: 14,
-                    marginBottom: 8,
-                    opacity: skeletonAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.3, 0.7],
-                    }),
-                  },
-                ]}
-              />
-              <Animated.View
-                style={[
-                  styles.inputContainer,
-                  styles.skeletonBox,
-                  {
-                    opacity: skeletonAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.3, 0.7],
-                    }),
-                  },
-                ]}
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Animated.View
-                style={[
-                  styles.skeletonText,
-                  {
-                    width: 50,
-                    height: 14,
-                    marginBottom: 8,
-                    opacity: skeletonAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.3, 0.7],
-                    }),
-                  },
-                ]}
-              />
-              <Animated.View
-                style={[
-                  styles.inputContainer,
-                  styles.skeletonBox,
-                  {
+                    width: "100%",
+                    height: 54,
+                    borderRadius: 12,
                     opacity: skeletonAnim.interpolate({
                       inputRange: [0, 1],
                       outputRange: [0.3, 0.7],
@@ -369,8 +312,6 @@ export default function EditProfileScreen({
               />
             </View>
           </View>
-
-          {/* Security Section Skeleton */}
           <View style={styles.section}>
             <Animated.View
               style={[
@@ -403,9 +344,11 @@ export default function EditProfileScreen({
               />
               <Animated.View
                 style={[
-                  styles.inputContainer,
-                  styles.skeletonBox,
+                  styles.skeletonText,
                   {
+                    width: "100%",
+                    height: 54,
+                    borderRadius: 12,
                     opacity: skeletonAnim.interpolate({
                       inputRange: [0, 1],
                       outputRange: [0.3, 0.7],
@@ -419,7 +362,7 @@ export default function EditProfileScreen({
                 style={[
                   styles.skeletonText,
                   {
-                    width: 140,
+                    width: 120,
                     height: 14,
                     marginBottom: 8,
                     opacity: skeletonAnim.interpolate({
@@ -431,9 +374,11 @@ export default function EditProfileScreen({
               />
               <Animated.View
                 style={[
-                  styles.inputContainer,
-                  styles.skeletonBox,
+                  styles.skeletonText,
                   {
+                    width: "100%",
+                    height: 54,
+                    borderRadius: 12,
                     opacity: skeletonAnim.interpolate({
                       inputRange: [0, 1],
                       outputRange: [0.3, 0.7],
@@ -442,21 +387,6 @@ export default function EditProfileScreen({
                 ]}
               />
             </View>
-            <Animated.View
-              style={[
-                styles.skeletonText,
-                {
-                  width: "100%",
-                  height: 40,
-                  borderRadius: 10,
-                  marginTop: 8,
-                  opacity: skeletonAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.3, 0.7],
-                  }),
-                },
-              ]}
-            />
           </View>
         </ScrollView>
       ) : (
@@ -467,7 +397,6 @@ export default function EditProfileScreen({
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            {/* Profile Section */}
             <View style={styles.section}>
               <Text
                 style={[styles.sectionTitle, { color: colors.textSecondary }]}
@@ -493,6 +422,8 @@ export default function EditProfileScreen({
                   />
                   <TextInput
                     style={[styles.input, { color: colors.text }]}
+                    placeholder="Masukkan nama"
+                    placeholderTextColor={colors.textSecondary}
                     value={name}
                     onChangeText={setName}
                     editable={!isLoading}
@@ -562,7 +493,6 @@ export default function EditProfileScreen({
               </View>
             </View>
 
-            {/* Security Section */}
             <View style={styles.section}>
               <Text
                 style={[styles.sectionTitle, { color: colors.textSecondary }]}
@@ -668,7 +598,6 @@ export default function EditProfileScreen({
             <View style={{ height: 100 }} />
           </ScrollView>
 
-          {/* Tombol Simpan - Naik saat keyboard aktif */}
           <Animated.View
             style={[
               styles.buttonContainer,
@@ -698,7 +627,6 @@ export default function EditProfileScreen({
         </>
       )}
 
-      {/* Success Modal */}
       {showSuccessModal && (
         <View style={styles.modalOverlay}>
           <TouchableOpacity
@@ -753,7 +681,7 @@ export default function EditProfileScreen({
       )}
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   mainContainer: {
@@ -766,17 +694,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 0,
     paddingTop: Platform.OS === "android" ? 10 : 60,
-    paddingBottom: 10,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F2F2F7",
-  },
-  headerPlaceholder: {
-    width: 40,
   },
   headerTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "700",
-    color: "#000000",
+  },
+  headerPlaceholder: {
+    width: 44,
   },
   closeButton: {
     padding: 4,
@@ -786,15 +712,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 20,
-  },
-  loadingCenter: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  skeletonBox: {
-    backgroundColor: "#E5E5EA",
+    paddingBottom: 40,
   },
   skeletonText: {
     backgroundColor: "#E5E5EA",
@@ -806,7 +724,6 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 12,
-    color: "#8E8E93",
     marginBottom: 16,
     fontWeight: "600",
     letterSpacing: 1,
@@ -817,16 +734,13 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#000000",
     marginBottom: 8,
   },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E5E5EA",
     borderRadius: 12,
-    backgroundColor: "#FFFFFF",
     paddingHorizontal: 16,
     height: 54,
   },
@@ -836,27 +750,19 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    color: "#000000",
   },
   inputDisabled: {
     backgroundColor: "#F2F2F7",
-    borderColor: "#E5E5EA",
-  },
-  inputTextDisabled: {
-    color: "#8E8E93",
   },
   noteContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
     paddingVertical: 8,
-    paddingHorizontal: 0,
     marginTop: -8,
   },
   noteText: {
     fontSize: 12,
-    color: "#8E8E93",
     marginLeft: 8,
     textAlign: "center",
   },
@@ -868,12 +774,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 16,
     paddingBottom: Platform.OS === "ios" ? 19 : 16,
-    backgroundColor: "#ffffff",
     borderTopWidth: 1,
-    borderTopColor: "#F2F2F7",
   },
   saveButton: {
-    backgroundColor: "#007AFF",
     borderRadius: 14,
     height: 54,
     justifyContent: "center",
@@ -945,3 +848,5 @@ const styles = StyleSheet.create({
     color: "#34C759",
   },
 });
+
+export default memo(EditProfileScreen);
